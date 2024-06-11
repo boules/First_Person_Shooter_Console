@@ -12,7 +12,7 @@ int nScreenWidth = 120;			//120 columns
 int nScreenHeight = 40;			//40 rows
 
 
-float fPlayerX = 14.0f;			// player initial position
+float fPlayerX = 14.7f;			// player initial position
 float fPlayerY = 1.0f;
 float fPlayerA = 0.0f;
 
@@ -78,10 +78,10 @@ int main() {
 		// contols the Character
 		// Handles CCW Rotation
 		if (GetAsyncKeyState((unsigned short)'A') & 0x8000) {
-			fPlayerA -= (fSpeed/5.0 * 0.75f) * fElapsedTime;
+			fPlayerA -= (fSpeed * 0.15f) * fElapsedTime;
 		}
 		if (GetAsyncKeyState((unsigned short)'D') & 0x8000) {
-			fPlayerA += (fSpeed/5.0 * 0.75f) * fElapsedTime;
+			fPlayerA += (fSpeed * 0.15f) * fElapsedTime;
 		}
 		if (GetAsyncKeyState((unsigned short)'W') & 0x8000) {
 			fPlayerX += sinf(fPlayerA) * fSpeed * fElapsedTime;
@@ -145,23 +145,23 @@ int main() {
 
 								// Angle of corner to eye
 								float vy = (float)nTestY + ty - fPlayerY;
-								float vx = (float)nTestY + tx - fPlayerX;
+								float vx = (float)nTestX + tx - fPlayerX;
 
 								float d = sqrt(vx * vx + vy * vy); // magnetiude of the vector
-								float dot = (fEyeX + vx / d) + (fEyeY * vy / d); // the dot product
+								float dot = (fEyeX * vx / d) + (fEyeY * vy / d); // the dot product
 
 								p.push_back(make_pair(d, dot));
 							}
 						}
+
 						// sort Pairs from closest to farthest
 						sort(p.begin(), p.end(), [](const pair<float, float>& left, const pair<float, float>& right) {return left.first < right.first; });
 						
-						float fBound = 0.01;
-						if ( acos( p.at(0).second ) < fBound ) bBoundary = true;
-						if ( acos( p.at(1).second ) < fBound ) bBoundary = true;
+						float fBound = 0.005;	// edge size
+						if (acos(p.at(0).second) < fBound) bBoundary = true;
+						if (acos(p.at(1).second) < fBound) bBoundary = true;
+						if (acos(p.at(2).second) < fBound) bBoundary = true;
 						
-
-					
 					}
 
 				}
