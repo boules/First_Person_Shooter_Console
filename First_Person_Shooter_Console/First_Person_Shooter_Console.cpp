@@ -1,23 +1,29 @@
-#include <chrono>
-#include <math.h>
 #include <iostream>
+#include <vector>
+#include <algorithm>
+#include <chrono>
 using namespace std;
+#include <math.h>
+#include <utility>
+#include <stdio.h>
 
 #include <Windows.h>
 int nScreenWidth = 120;			//120 columns
 int nScreenHeight = 40;			//40 rows
 
 
-float fPlayerX = 8.0f;
-float fPlayerY = 8.0f;
+float fPlayerX = 14.0f;			// player initial position
+float fPlayerY = 1.0f;
 float fPlayerA = 0.0f;
 
-int nMapHeight = 16;
+int nMapHeight = 16;			// the floor dimentions of the map
 int nMapWidth = 16;
 
 // field of view
-float fFOV = 3.14159 / 4.0; 			// pi/4  it means quarter of a circle in rad
+float fFOV = 3.14159f / 4.0f; 			// pi/4  it means quarter of a circle in rad
+
 float fDepth = 16.0f;
+float fSpeed = 5.0f;
 
 /**
  * # for a wall
@@ -72,29 +78,29 @@ int main() {
 		// contols the Character
 		// Handles CCW Rotation
 		if (GetAsyncKeyState((unsigned short)'A') & 0x8000) {
-			fPlayerA -= (0.8f) * fElapsedTime;
+			fPlayerA -= (fSpeed/5.0 * 0.75f) * fElapsedTime;
 		}
 		if (GetAsyncKeyState((unsigned short)'D') & 0x8000) {
-			fPlayerA += (0.8f) * fElapsedTime;
+			fPlayerA += (fSpeed/5.0 * 0.75f) * fElapsedTime;
 		}
 		if (GetAsyncKeyState((unsigned short)'W') & 0x8000) {
-			fPlayerX += sinf(fPlayerA) * 5.0f * fElapsedTime;
-			fPlayerY += cosf(fPlayerA) * 5.0f * fElapsedTime;
+			fPlayerX += sinf(fPlayerA) * fSpeed * fElapsedTime;
+			fPlayerY += cosf(fPlayerA) * fSpeed * fElapsedTime;
 
 			// this condition to stop the player from getting through walls
-			if (map[(int)fPlayerY * nMapWidth + (int)fPlayerX] == '#') {
-				fPlayerX -= sinf(fPlayerA) * 5.0f * fElapsedTime;
-				fPlayerY -= cosf(fPlayerA) * 5.0f * fElapsedTime;
+			if (map.c_str()[(int)fPlayerX * nMapWidth + (int)fPlayerY] == '#') {
+				fPlayerX -= sinf(fPlayerA) * fSpeed * fElapsedTime;
+				fPlayerY -= cosf(fPlayerA) * fSpeed * fElapsedTime;
 			}
 		}
 		if (GetAsyncKeyState((unsigned short)'S') & 0x8000) {
-			fPlayerX -= sinf(fPlayerA) * 5.0f * fElapsedTime;
-			fPlayerY -= cosf(fPlayerA) * 5.0f * fElapsedTime;
+			fPlayerX -= sinf(fPlayerA) * fSpeed * fElapsedTime;
+			fPlayerY -= cosf(fPlayerA) * fSpeed * fElapsedTime;
 
 			// this condition to stop the player from getting through walls
-			if (map[(int)fPlayerY * nMapWidth + (int)fPlayerX] == '#') {
-				fPlayerX += sinf(fPlayerA) * 5.0f * fElapsedTime;
-				fPlayerY += cosf(fPlayerA) * 5.0f * fElapsedTime;
+			if (map.c_str()[(int)fPlayerX * nMapWidth + (int)fPlayerY] == '#') {
+				fPlayerX += sinf(fPlayerA) * fSpeed * fElapsedTime;
+				fPlayerY += cosf(fPlayerA) * fSpeed * fElapsedTime;
 			}
 		}
 
@@ -103,15 +109,18 @@ int main() {
 		for (int x = 0; x < nScreenWidth; x++) {
 			float fRayAngle = (fPlayerA - fFOV / 2.0f) + ((float)x / (float)nScreenWidth) * fFOV;
 
-			float fDistanceToWall = 0;
+			float fDistanceToWall = 0.0f;
+			float fStepSize = 0.1f;
+
 			bool bHitWall = false;
+			bool bBoundary = false;
 
 			float fEyeX = sinf(fRayAngle);		// Unit vector for ray in player space
 			float fEyeY = cosf(fRayAngle);
 
 			while (!bHitWall && fDistanceToWall < fDepth) {
 
-				fDistanceToWall += 0.1f;
+				fDistanceToWall += fStepSize;
 
 				int nTestX = (int)(fPlayerX + fEyeX * fDistanceToWall);
 				int nTestY = (int)(fPlayerY + fEyeY * fDistanceToWall);
@@ -126,8 +135,33 @@ int main() {
 				else {
 
 					// Ray is inbounds so test to see if the ray cell is a wall block
-					if (map[nTestY * nMapWidth + nTestX] == '#') {
+					if (map.c_str()[nTestX * nMapWidth + nTestY] == '#') {
 						bHitWall = true;
+
+						vector<pair<float, float>> p; // distance, dot product (angle between two vectors)
+						
+						for (int tx = 0; tx < 2; tx++) {
+							for (int ty = 0; ty < 2; ty++) {
+
+								// Angle of corner to eye
+								float vy = (float)nTestY + ty - fPlayerY;
+								float vx = (float)nTestY + tx - fPlayerX;
+
+								float d = sqrt(vx * vx + vy * vy); // magnetiude of the vector
+								float dot = (fEyeX + vx / d) + (fEyeY * vy / d); // the dot product
+
+								p.push_back(make_pair(d, dot));
+							}
+						}
+						// sort Pairs from closest to farthest
+						sort(p.begin(), p.end(), [](const pair<float, float>& left, const pair<float, float>& right) {return left.first < right.first; });
+						
+						float fBound = 0.01;
+						if ( acos( p.at(0).second ) < fBound ) bBoundary = true;
+						if ( acos( p.at(1).second ) < fBound ) bBoundary = true;
+						
+
+					
 					}
 
 				}
@@ -140,15 +174,17 @@ int main() {
 
 			short nShade = ' ';
 			// Extended ASCII table for shaded walls
-			if (fDistanceToWall <= fDepth / 4.0f)			nShade = 0x2588;	/* close to the wall*/
-			else if (fDistanceToWall < fDepth / 2.0f)	nShade = 0x2593;
-			else if (fDistanceToWall < fDepth / 1.0f)	nShade = 0x2592;
+			if (fDistanceToWall <= fDepth / 4.0f)		nShade = 0x2588;	/* close to the wall*/
+			else if (fDistanceToWall < fDepth / 3.0f)	nShade = 0x2593;
+			else if (fDistanceToWall < fDepth / 2.0f)	nShade = 0x2592;
 			else if (fDistanceToWall < fDepth)			nShade = 0x2591;	/* to far away (less filled so it seems darker)*/
 			else										nShade = ' ';
 
+			if (bBoundary)		nShade = ' ';
+
 			for (int y = 0; y < nScreenHeight; y++) {
 
-				if (y < nCeiling) {
+				if (y <= nCeiling) {
 					screen[y * nScreenWidth + x] = ' ';
 
 				}
@@ -158,23 +194,32 @@ int main() {
 				}
 				else
 				{	// the floor
-					short nFloorShade = ' ';
 					float b = 1.0f - (((float)y - nScreenHeight / 2.0f) / ((float)nScreenHeight / 2.0f));
-					if (b < 0.25)	   nFloorShade = '#';
-					else if (b < 0.50) nFloorShade = 'x';
-					else if (b < 0.75) nFloorShade = '.';
-					else if (b < 0.90) nFloorShade = '-';
-					else			   nFloorShade = ' ';
+					if (b < 0.25)	   nShade = '#';
+					else if (b < 0.50) nShade = 'x';
+					else if (b < 0.75) nShade = '.';
+					else if (b < 0.90) nShade = '-';
+					else			   nShade = ' ';
 
 
-
-					screen[y * nScreenWidth + x] = nFloorShade;
+					screen[y * nScreenWidth + x] = nShade;
 				}
 
 			}
 
 		}
 
+		// Display Stats
+		swprintf_s(screen, 40, L"X=%3.2f, Y=%3.2f, A=%3.2f FPS=%3.2f ", fPlayerX, fPlayerY, fPlayerA, 1.0f / fElapsedTime);
+
+		// Display Map
+		for (int nx = 0; nx < nMapWidth; nx++) {
+			for (int ny = 0; ny < nMapWidth; ny++) {
+
+				screen[(ny + 1) * nScreenWidth + nx] = map[ny * nMapWidth + nx];
+			}
+		}
+		screen[((int)fPlayerX + 1) * nScreenWidth + (int)fPlayerY] = 'P';
 
 
 		screen[nScreenWidth * nScreenHeight - 1] = '\0';
